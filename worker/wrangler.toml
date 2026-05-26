@@ -1,0 +1,7 @@
+name = "mcc-api"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+
+# Environment Variables (setze diese im Cloudflare Dashboard oder via CLI):
+# ANTHROPIC_API_KEY = "sk-ant-..."
+# ALLOWED_ORIGINS = "https://dein-projekt.pages.dev"
