@@ -462,6 +462,28 @@ export default function App() {
     navigator.clipboard.writeText(text || "").then(() => notify("Kopiert!")).catch(() => notify("Kopieren fehlgeschlagen", "error"));
   };
 
+  const downloadImage = async (url) => {
+    if (!url) return;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("fetch failed");
+      const blob = await res.blob();
+      const ext = (blob.type.split("/")[1] || "jpg").split("+")[0];
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `bild-${today()}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      notify("Bild heruntergeladen");
+    } catch {
+      window.open(url, "_blank");
+      notify("Bild im neuen Tab geöffnet – dort speichern (Rechtsklick bzw. lange drücken)", "error");
+    }
+  };
+
   const channelText = (draft, channelName) => draft.channelTexts?.[channelName] || draft.coreMessage || "";
 
   const handleChannelAction = (channel, draft) => {
@@ -942,7 +964,14 @@ export default function App() {
 
             <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
               <h3 className="font-semibold text-sm text-slate-500 uppercase tracking-wider">Vorschau</h3>
-              {selectedDraft.imageUrl && <img src={selectedDraft.imageUrl} alt="" className="max-h-44 rounded-lg border border-slate-200" />}
+              {selectedDraft.imageUrl && (
+                <div className="space-y-2">
+                  <img src={selectedDraft.imageUrl} alt="" className="max-h-44 rounded-lg border border-slate-200" />
+                  <button onClick={() => downloadImage(selectedDraft.imageUrl)} className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-slate-200 text-sm font-medium hover:border-indigo-300 hover:text-indigo-600">
+                    <Icons.Download className="w-4 h-4" /> Bild herunterladen
+                  </button>
+                </div>
+              )}
               {selectedDraft.subject && <div><p className="text-[10px] font-semibold text-slate-400 mb-0.5">BETREFF</p><p className="text-sm font-medium">{selectedDraft.subject}</p></div>}
               <div><p className="text-[10px] font-semibold text-slate-400 mb-0.5">KERNBOTSCHAFT</p><p className="text-sm text-slate-700">{selectedDraft.coreMessage || "–"}</p></div>
             </div>
