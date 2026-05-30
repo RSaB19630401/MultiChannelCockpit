@@ -1,111 +1,113 @@
 # MultiChannelCockpit
 
-MultiChannelCockpit für Mehrspartenvereine (und Unternehmen). Unterstützt Kommunikationsteams dabei, Vereinskommunikation schneller zu planen, zu formulieren, freizugeben und kanalbereit zu versenden.
+Kommunikations-Cockpit für Mehrspartenvereine als **Team-Tool**: gemeinsame Datenbasis, kanalgerechte KI-Texte, Freigabe-Workflow mit Rollen und Versandzentrale.
 
-## Features
+## Funktionen
 
-- **Dashboard** mit KPI-Übersicht, Wochenkalender und Checklisten-Ansicht
-- **KI-Entwurfsgenerator** (Claude API) – erstellt Kernbotschaft, Kurztext, Langtext, Betreffzeile und Freigabe-Checkliste
-- **Freigabe-Workflow** mit Rollen (Admin, Redakteur, Autor) und Status (Entwurf → Freigabe → Bereit → Versendet)
-- **Kanal-Konfiguration** – WhatsApp, Instagram, Newsletter, Website, Presse, Aushang + eigene Kanäle
-- **Versandzentrale** – Inhalte direkt über WhatsApp, E-Mail, CMS oder Teilen-Menü versenden
-- **Responsive** – Desktop und Mobile
+- **Geteilte Datenbasis** – alle Teammitglieder sehen dieselben Entwürfe (Cloudflare D1)
+- **Kanalgerechte KI-Texte** – pro Kanal eine eigene Variante (WhatsApp persönlich, Instagram mit Hashtags, Presse formal …)
+- **Vereinsprofil** – Name, Hashtags, Signatur und Stil-Beispiele fließen in jede Generierung ein
+- **Bild-Upload** – Bilder werden in Cloudflare R2 gespeichert
+- **Freigabe-Workflow** mit Rollen (Admin, Redakteur, Autor) und Status (Entwurf → Freigabe → Bereit → Versendet) inkl. **Änderungsanforderung mit Kommentar** und **Verlauf**
+- **Ehrlicher Versand-Status** – ein Kanal gilt erst nach manueller Bestätigung als gesendet
+- **Vorlagen** für wiederkehrende Anlässe
+- **Wochenkalender + Checklisten-Ansicht**
+- **JSON-Export** zur Datensicherung
+- **Responsive** für Desktop und Mobile
 
-## Tech-Stack
+## Architektur
 
-- React 18 + Vite
-- Tailwind CSS
-- Claude API (Anthropic) für KI-Texterstellung
-- Cloudflare Pages (Frontend) + Cloudflare Worker (API-Proxy)
+```
+Browser (Cloudflare Pages)  ──►  Cloudflare Worker  ──►  Anthropic Claude API
+       React + Vite                   │  │
+                                      │  └─►  D1 (Datenbank: Entwürfe, Konfig, Verlauf)
+                                      └────►  R2 (Bilder)
+```
+
+Der Anthropic API-Key liegt ausschließlich im Worker. Das Frontend authentifiziert sich mit einem gemeinsamen **Team-Schlüssel**.
 
 ---
 
-## Schnellstart (lokal)
+## Setup
+
+### Teil A – Backend (Cloudflare Worker + D1 + R2)
+
+Voraussetzung: Node.js installiert. Wrangler-CLI:
 
 ```bash
-# Dependencies installieren
-npm install
-
-# Entwicklungsserver starten
-npm run dev
-
-# Build erstellen
-npm run build
+npm install -g wrangler
+wrangler login
 ```
 
----
-
-## Deployment
-
-### 1. GitHub Repository erstellen
-
-```bash
-# Im Projektverzeichnis
-git init
-git add .
-git commit -m "Initial commit: MultiChannelCockpit"
-
-# GitHub Repo erstellen (über github.com oder CLI)
-gh repo create MultiChannelCockpit --private --push
-# oder manuell:
-git remote add origin https://github.com/DEIN-USER/MultiChannelCockpit.git
-git push -u origin main
-```
-
-### 2. Cloudflare Pages (Frontend)
-
-1. Gehe zu [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → **Create**
-2. Wähle **Pages** → **Connect to Git**
-3. Wähle dein GitHub-Repository
-4. Build-Konfiguration:
-   - **Framework preset:** `None`
-   - **Build command:** `npm run build`
-   - **Build output directory:** `dist`
-   - **Root directory:** `/` (Standardwert)
-5. Klicke **Save and Deploy**
-
-Nach dem Deployment erhältst du eine URL wie `https://MultiChannelCockpit.pages.dev`
-
-### 3. Cloudflare Worker (API-Proxy) – empfohlen
-
-Der Worker hält den Anthropic API-Key serverseitig, damit er nicht im Browser sichtbar ist.
-
-**Option A: Über das Dashboard**
-
-1. Gehe zu **Workers & Pages** → **Create** → **Worker**
-2. Name: `mcc-api`
-3. Kopiere den Inhalt von `worker/worker.js` in den Editor
-4. Gehe zu **Settings** → **Variables and Secrets**
-5. Füge hinzu:
-   - `ANTHROPIC_API_KEY` = `sk-ant-...` (als **Secret/Encrypt**)
-   - `ALLOWED_ORIGINS` = `https://MultiChannelCockpit.pages.dev` (als **Text**)
-6. Deploye den Worker
-
-**Option B: Über Wrangler CLI**
+Im Ordner `worker/`:
 
 ```bash
 cd worker
 
-# Wrangler installieren (falls nötig)
-npm install -g wrangler
+# 1. D1-Datenbank anlegen
+wrangler d1 create mcc-db
+# → Gib die ausgegebene database_id in wrangler.toml bei database_id ein
 
-# Einloggen
-wrangler login
+# 2. Tabellen anlegen
+wrangler d1 execute mcc-db --file=./schema.sql --remote
 
-# Secret setzen
-wrangler secret put ANTHROPIC_API_KEY
-# → API-Key eingeben
+# 3. R2-Bucket für Bilder anlegen
+wrangler r2 bucket create mcc-images
 
-# Deployen
+# 4. Geheimnisse setzen
+wrangler secret put ANTHROPIC_API_KEY     # → sk-ant-... eingeben
+wrangler secret put TEAM_KEY              # → frei wählbares Team-Passwort
+
+# 5. Worker deployen
 wrangler deploy
 ```
 
-### 4. App konfigurieren
+Nach dem Deploy erhältst du eine URL wie `https://mcc-api.DEIN-ACCOUNT.workers.dev`.
 
-1. Öffne die App im Browser
-2. Gehe zu **Einstellungen** → **KI / API**
-3. Trage die Worker-URL ein, z.B. `https://mcc-api.DEIN-ACCOUNT.workers.dev`
-4. Speichern
+**Bilder öffentlich machen (R2):** Im Cloudflare Dashboard → R2 → `mcc-images` → Settings → Public access aktivieren (r2.dev-Domain oder eigene Domain). Die öffentliche Basis-URL anschließend in `wrangler.toml` bei `PUBLIC_IMAGE_BASE` eintragen und erneut `wrangler deploy` ausführen.
+
+**Origin freigeben:** In `wrangler.toml` `ALLOWED_ORIGINS` auf deine Pages-URL setzen (z.B. `https://multichannelcockpit.pages.dev`).
+
+### Teil B – Frontend (Cloudflare Pages)
+
+1. Code auf GitHub pushen (siehe unten)
+2. Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
+3. Repository wählen, dann:
+   - **Build command:** `npm run build`
+   - **Build output directory:** `dist`
+4. **Save and Deploy**
+
+### Teil C – Verbinden
+
+1. App im Browser öffnen
+2. Im Startbildschirm **Backend-URL** (Worker-URL) und **Team-Schlüssel** eingeben
+3. Verbinden – fertig. Jedes Teammitglied gibt einmalig dieselbe URL und denselben Schlüssel ein.
+
+---
+
+## Lokale Entwicklung
+
+```bash
+npm install
+npm run dev      # Frontend auf http://localhost:5173
+```
+
+Für das Backend lokal: `cd worker && wrangler dev`
+
+---
+
+## GitHub – Code hochladen
+
+Am einfachsten mit GitHub Desktop: Repository klonen, Projektinhalt hineinkopieren, committen, „Push origin". Oder per Terminal:
+
+```bash
+git init
+git add .
+git commit -m "MultiChannelCockpit Team-Version"
+git branch -M main
+git remote add origin https://github.com/DEIN-USER/MultiChannelCockpit.git
+git push -u origin main
+```
 
 ---
 
@@ -113,37 +115,35 @@ wrangler deploy
 
 ```
 MultiChannelCockpit/
-├── index.html              # HTML Entry Point
-├── package.json            # Dependencies & Scripts
-├── vite.config.js          # Vite Konfiguration
-├── tailwind.config.js      # Tailwind Konfiguration
-├── postcss.config.js       # PostCSS Konfiguration
-├── .gitignore
-├── public/
-│   └── favicon.svg
+├── index.html
+├── package.json
+├── vite.config.js
+├── tailwind.config.js
+├── postcss.config.js
+├── public/favicon.svg
 ├── src/
-│   ├── main.jsx            # React Entry Point
-│   ├── index.css           # Globale Styles + Tailwind
-│   └── App.jsx             # Haupt-Komponente (gesamte App)
+│   ├── main.jsx
+│   ├── index.css
+│   └── App.jsx            # Frontend (Cockpit, spricht mit dem Worker)
 └── worker/
-    ├── worker.js           # Cloudflare Worker (API-Proxy)
-    └── wrangler.toml       # Worker Konfiguration
+    ├── worker.js          # Backend: D1, R2, KI-Proxy, Verlauf
+    ├── schema.sql         # Datenbank-Tabellen
+    └── wrangler.toml      # Worker-Konfiguration (D1- & R2-Bindings)
 ```
 
 ## Rollen
 
-| Rolle        | Entwürfe erstellen | Bearbeiten | Freigeben | Versenden | Konfiguration |
-|:-------------|:------------------:|:----------:|:---------:|:---------:|:-------------:|
-| Autor        | ✅                 | ✅         | ❌        | ❌        | ❌            |
-| Redakteur    | ✅                 | ✅         | ✅        | ✅        | ❌            |
-| Administrator| ✅                 | ✅         | ✅        | ✅        | ✅            |
+| Rolle         | Erstellen | Bearbeiten | Freigeben | Versenden | Konfiguration |
+|:--------------|:---------:|:----------:|:---------:|:---------:|:-------------:|
+| Autor         | ✅        | ✅         | ❌        | ❌        | ❌            |
+| Redakteur     | ✅        | ✅         | ✅        | ✅        | ❌            |
+| Administrator | ✅        | ✅         | ✅        | ✅        | ✅            |
 
-## Sicherheitshinweise
+## Hinweise
 
-- **Niemals** den Anthropic API-Key direkt im Frontend-Code committen
-- Nutze den Cloudflare Worker als Proxy für Produktionsbetrieb
-- Setze `ALLOWED_ORIGINS` im Worker auf deine Pages-Domain
-- Die direkte API-Key-Eingabe in der App ist nur für lokale Tests gedacht
+- **Sicherheit:** API-Key niemals ins Repo committen – er gehört als Worker-Secret hinterlegt.
+- **DSGVO:** In Kanal-Zielen werden Telefonnummern/E-Mail-Verteiler gespeichert. Für einen deutschen Verein Einwilligung und Speicherort beachten.
+- **Versand:** Die App kann WhatsApp/E-Mail/Teilen nur mit vorbefülltem Text öffnen – das tatsächliche Absenden bestätigt das Teammitglied manuell.
 
 ## Lizenz
 

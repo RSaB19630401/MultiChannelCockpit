@@ -2,6 +2,26 @@ name = "mcc-api"
 main = "worker.js"
 compatibility_date = "2024-12-01"
 
-# Environment Variables (setze diese im Cloudflare Dashboard oder via CLI):
-# ANTHROPIC_API_KEY = "sk-ant-..."
-# ALLOWED_ORIGINS = "https://dein-projekt.pages.dev"
+# ─── D1-Datenbank (geteilte Speicherung) ───
+# Nach "wrangler d1 create mcc-db" die ausgegebene database_id hier eintragen:
+[[d1_databases]]
+binding = "DB"
+database_name = "mcc-db"
+database_id = "HIER_DEINE_DATABASE_ID_EINTRAGEN"
+
+# ─── R2-Bucket (Bild-Upload) ───
+# Nach "wrangler r2 bucket create mcc-images":
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "mcc-images"
+
+# ─── Variablen (nicht-geheim) ───
+[vars]
+# Erlaubte Herkunft(e) der App, mit Komma getrennt. * = alle (nur fürs Testen).
+ALLOWED_ORIGINS = "https://multichannelcockpit.pages.dev"
+# Öffentliche Basis-URL des R2-Buckets (siehe README, R2 → Public access).
+PUBLIC_IMAGE_BASE = ""
+
+# ─── Secrets (NICHT hier eintragen! Per CLI setzen) ───
+# wrangler secret put ANTHROPIC_API_KEY
+# wrangler secret put TEAM_KEY
